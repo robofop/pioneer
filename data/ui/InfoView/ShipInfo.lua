@@ -1,17 +1,16 @@
--- Copyright © 2008-2014 Pioneer Developers. See AUTHORS.txt for details
+-- Copyright © 2008-2015 Pioneer Developers. See AUTHORS.txt for details
 -- Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
 
 local Engine = import("Engine")
 local Lang = import("Lang")
 local Game = import("Game")
-local EquipDef = import("EquipDef")
+local Equipment = import("Equipment")
 local ShipDef = import("ShipDef")
 
 local ModelSpinner = import("UI.Game.ModelSpinner")
 
 local ui = Engine.ui
 local l = Lang.GetResource("ui-core");
-local lcore = Lang.GetResource("core");
 
 local yes_no = function (binary)
 	if binary == 1 then
@@ -25,16 +24,22 @@ end
 local shipInfo = function (args)
 	local shipDef = ShipDef[Game.player.shipId]
 
-	local hyperdrive =              table.unpack(Game.player:GetEquip("ENGINE"))
-	local frontWeapon, rearWeapon = table.unpack(Game.player:GetEquip("LASER"))
+	local hyperdrive =              table.unpack(Game.player:GetEquip("engine"))
+	local frontWeapon =             table.unpack(Game.player:GetEquip("laser_front"))
+	local rearWeapon =              table.unpack(Game.player:GetEquip("laser_rear"))
 
-	hyperdrive =  hyperdrive  or "NONE"
-	frontWeapon = frontWeapon or "NONE"
-	rearWeapon =  rearWeapon  or "NONE"
+	hyperdrive =  hyperdrive  or nil
+	frontWeapon = frontWeapon or nil
+	rearWeapon =  rearWeapon  or nil
 
 	local player = Game.player
 
-	local mass_with_fuel = player.totalMass + player.fuelMassLeft
+	local shipNameEntry = ui:TextEntry(player.shipName):SetFont("HEADING_SMALL")
+	shipNameEntry.onChange:Connect(function (newName)
+		player:SetShipName(newName)
+	end )
+
+	local mass_with_fuel = player.staticMass + player.fuelMassLeft
 	local mass_with_fuel_kg = 1000 * mass_with_fuel
 
 	-- ship stats mass is in tonnes; scale by 1000 to convert to kg
@@ -43,31 +48,32 @@ local shipInfo = function (args)
 	local up_acc = shipDef.linearThrust.UP / mass_with_fuel_kg
 
 	-- delta-v calculation according to http://en.wikipedia.org/wiki/Tsiolkovsky_rocket_equation
-	local deltav = shipDef.effectiveExhaustVelocity * math.log((player.totalMass + player.fuelMassLeft) / player.totalMass)
+	local deltav = shipDef.effectiveExhaustVelocity * math.log((player.staticMass + player.fuelMassLeft) / player.staticMass)
 
 	local equipItems = {}
-	for i = 1,#Constants.EquipType do
-		local type = Constants.EquipType[i]
-		local et = EquipDef[type]
-		local slot = et.slot
-		if (slot ~= "CARGO" and slot ~= "MISSILE" and slot ~= "ENGINE" and slot ~= "LASER") then
-			local count = Game.player:GetEquipCount(slot, type)
-			if count > 0 then
-				if count > 1 then
-					if type == "SHIELD_GENERATOR" then
-						table.insert(equipItems,
-							ui:Label(string.interp(l.N_SHIELD_GENERATORS, { quantity = string.format("%d", count) })))
-					elseif type == "PASSENGER_CABIN" then
-						table.insert(equipItems,
-							ui:Label(string.interp(l.N_OCCUPIED_PASSENGER_CABINS, { quantity = string.format("%d", count) })))
-					elseif type == "UNOCCUPIED_CABIN" then
-						table.insert(equipItems,
-							ui:Label(string.interp(l.N_UNOCCUPIED_PASSENGER_CABINS, { quantity = string.format("%d", count) })))
+	local equips = {Equipment.cargo, Equipment.misc, Equipment.hyperspace, Equipment.laser}
+	for _,t in pairs(equips) do
+		for k,et in pairs(t) do
+			local slot = et:GetDefaultSlot(Game.player)
+			if (slot ~= "cargo" and slot ~= "missile" and slot ~= "engine" and slot ~= "laser_front" and slot ~= "laser_rear") then
+				local count = Game.player:CountEquip(et)
+				if count > 0 then
+					if count > 1 then
+						if et == Equipment.misc.shield_generator then
+							table.insert(equipItems,
+								ui:Label(string.interp(l.N_SHIELD_GENERATORS, { quantity = string.format("%d", count) })))
+						elseif et == Equipment.misc.cabin_occupied then
+							table.insert(equipItems,
+								ui:Label(string.interp(l.N_OCCUPIED_PASSENGER_CABINS, { quantity = string.format("%d", count) })))
+						elseif et == Equipment.misc.cabin then
+							table.insert(equipItems,
+								ui:Label(string.interp(l.N_UNOCCUPIED_PASSENGER_CABINS, { quantity = string.format("%d", count) })))
+						else
+							table.insert(equipItems, ui:Label(et:GetName()))
+						end
 					else
-						table.insert(equipItems, ui:Label(et.name))
+						table.insert(equipItems, ui:Label(et:GetName()))
 					end
-				else
-					table.insert(equipItems, ui:Label(et.name))
 				end
 			end
 		end
@@ -78,7 +84,7 @@ local shipInfo = function (args)
 			:SetColumn(0, {
 				ui:Table():AddRows({
 					ui:Table():SetColumnSpacing(10):AddRows({
-						{ l.HYPERDRIVE..":", EquipDef[hyperdrive].name },
+						{ l.HYPERDRIVE..":", hyperdrive and hyperdrive:GetName() or l.NONE },
 						{
 							l.HYPERSPACE_RANGE..":",
 							string.interp(
@@ -89,13 +95,15 @@ local shipInfo = function (args)
 							),
 						},
 						"",
-						{ l.WEIGHT_EMPTY..":",  string.format("%dt", player.totalMass - player.usedCapacity) },
+						{ l.WEIGHT_EMPTY..":",  string.format("%dt", player.staticMass - player.usedCapacity) },
 						{ l.CAPACITY_USED..":", string.format("%dt (%dt "..l.FREE..")", player.usedCapacity,  player.freeCapacity) },
+						{ l.CARGO_SPACE..":", string.format("%dt (%dt "..l.MAX..")", player.totalCargo, shipDef.equipSlotCapacity.cargo) },
+						{ l.CARGO_SPACE_USED..":", string.format("%dt (%dt "..l.FREE..")", player.usedCargo, player.totalCargo - player.usedCargo) },
 						{ l.FUEL_WEIGHT..":",   string.format("%dt (%dt "..l.MAX..")", player.fuelMassLeft, shipDef.fuelTankMass ) },
 						{ l.ALL_UP_WEIGHT..":", string.format("%dt", mass_with_fuel ) },
 						"",
-						{ l.FRONT_WEAPON..":", EquipDef[frontWeapon].name },
-						{ l.REAR_WEAPON..":",  EquipDef[rearWeapon].name },
+						{ l.FRONT_WEAPON..":", frontWeapon and frontWeapon:GetName() or l.NONE },
+						{ l.REAR_WEAPON..":",  rearWeapon and rearWeapon:GetName() or l.NONE },
 						{ l.FUEL..":",         string.format("%d%%", Game.player.fuel)},
 						{ l.DELTA_V..":",      string.format("%d km/s", deltav / 1000)},
 						"",
@@ -106,10 +114,9 @@ local shipInfo = function (args)
 						{ l.MINIMUM_CREW..":", shipDef.minCrew },
 						{ l.CREW_CABINS..":",  shipDef.maxCrew },
 						"",
-						{ l.MISSILE_MOUNTS..":",            shipDef.equipSlotCapacity["MISSILE"]},
-						{ lcore.ATMOSPHERIC_SHIELDING..":", yes_no(shipDef.equipSlotCapacity["ATMOSHIELD"])},
-						{ lcore.FUEL_SCOOP..":",            yes_no(shipDef.equipSlotCapacity["FUELSCOOP"])},
-						{ lcore.CARGO_SCOOP..":",           yes_no(shipDef.equipSlotCapacity["CARGOSCOOP"])},
+						{ l.MISSILE_MOUNTS..":",            shipDef.equipSlotCapacity.missile},
+						{ l.ATMOSPHERIC_SHIELDING..":",     yes_no(shipDef.equipSlotCapacity.atmo_shield)},
+						{ l.SCOOP_MOUNTS..":",              shipDef.equipSlotCapacity.scoop},
 					}),
 					"",
 					ui:Label(l.EQUIPMENT):SetFont("HEADING_LARGE"),
@@ -118,7 +125,14 @@ local shipInfo = function (args)
 			})
 			:SetColumn(2, {
 				ui:VBox(10)
-					:PackEnd(ui:Label(shipDef.name):SetFont("HEADING_LARGE"))
+					:PackEnd(ui:HBox(10):PackEnd({
+						ui:VBox(5):PackEnd({
+							ui:Label(shipDef.name):SetFont("HEADING_LARGE"),
+						}),
+						ui:VBox(5):PackEnd({
+							ui:Expand("HORIZONTAL", shipNameEntry),
+						})
+					}))
 					:PackEnd(ModelSpinner.New(ui, shipDef.modelName, Game.player:GetSkin()))
 			})
 end

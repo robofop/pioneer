@@ -25,11 +25,7 @@
    },
    "GO_BACK" : {
       "description" : "",
-      "message" : "Go back"
-   },
-   "HANG_UP" : {
-      "description" : "",
-      "message" : "Hang up."
+      "message" : "Grįžti atgal"
    },
    "LIST_BENEFITS_DISPOSAL" : {
       "description" : "",

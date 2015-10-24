@@ -23,10 +23,6 @@
       "description" : "",
       "message" : "Go back"
    },
-   "HANG_UP" : {
-      "description" : "",
-      "message" : "Hang up."
-   },
    "IM_SORRY_IM_NOT_PREPARED_TO_GO_ANY_LOWER" : {
       "description" : "",
       "message" : "I'm sorry, I'm not prepared to go any lower."
@@ -58,6 +54,10 @@
    "PILOT" : {
       "description" : "",
       "message" : "Pilot"
+   },
+   "NO_CREW_AVAILABLE" : {
+      "description" : "",
+      "message" : "Sorry, no candidates are currently seeking employment at {station}"
    },
    "POTENTIAL_CREW_MEMBERS" : {
       "description" : "",

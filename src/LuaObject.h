@@ -1,4 +1,4 @@
-// Copyright © 2008-2014 Pioneer Developers. See AUTHORS.txt for details
+// Copyright © 2008-2015 Pioneer Developers. See AUTHORS.txt for details
 // Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
 
 #ifndef _LUAOBJECT_H
@@ -7,9 +7,11 @@
 #include "Lua.h"
 #include "LuaRef.h"
 #include "LuaPushPull.h"
+#include "LuaUtils.h"
 #include "LuaWrappable.h"
 #include "RefCounted.h"
 #include "DeleteEmitter.h"
+#include "Serializer.h"
 #include <typeinfo>
 #include <tuple>
 
@@ -27,7 +29,7 @@
 //   LuaObject<Ship>::PushToLua(s);
 //
 //   // RefCounted, Lua will take a reference
-//   StarSystem *s = StarSystemCache::GetCached(SystemPath(0,0,0,0));
+//   StarSystem *s = Pi::GetGalaxy()->GetStarSystem(SystemPath(0,0,0,0));
 //   LuaObject<StarSystem>::PushToLua(s);
 //
 //   // Heap-allocated, Lua will get a copy
@@ -66,6 +68,25 @@
 
 // type for promotion test callbacks
 typedef bool (*PromotionTest)(LuaWrappable *o);
+
+// type for serializer function pair
+struct SerializerPair {
+	typedef std::string (*Serializer)(LuaWrappable *o);
+	typedef bool (*Deserializer)(const char *stream, const char **next);
+
+	SerializerPair() :
+		serialize(nullptr),
+		deserialize(nullptr)
+	{}
+
+	SerializerPair(Serializer _serialize, Deserializer _deserialize) :
+		serialize(_serialize),
+		deserialize(_deserialize)
+	{}
+
+	Serializer serialize;
+	Deserializer deserialize;
+};
 
 
 // wrapper baseclass, and extra bits for getting at certain parts of the
@@ -123,6 +144,11 @@ protected:
 	// object will be of target_type
 	static void RegisterPromotion(const char *base_type, const char *target_type, PromotionTest test_fn);
 
+	static void RegisterSerializer(const char *type, SerializerPair pair);
+
+	std::string Serialize();
+	static bool Deserialize(const char *stream, const char **next);
+
     // allocate n bytes from Lua memory and leave it an associated userdata on
     // the stack. this is a wrapper around lua_newuserdata
 	static void *Allocate(size_t n);
@@ -146,6 +172,9 @@ private:
 
 	// lua method to set a property on a propertied object
 	static int l_setprop(lua_State *l);
+
+	// lua method to unset a property on a propertied object
+	static int l_unsetprop(lua_State *l);
 
 	// lua method to check the existence of a specific property on an object
 	static int l_hasprop(lua_State *l);
@@ -315,17 +344,20 @@ template <typename T>
 template <typename Ret, typename Key, typename ...Args>
 inline Ret LuaObject<T>::CallMethod(T* o, const Key &key, const Args &...args) {
 	lua_State *l = Lua::manager->GetLuaState();
+	LUA_DEBUG_START(l);
 	Ret return_value;
 
+	lua_checkstack(l, sizeof...(args)+5);
 	PushToLua(o);
 	pi_lua_generic_push(l, key);
 	lua_gettable(l, -2);
 	lua_pushvalue(l, -2);
 	lua_remove(l, -3);
 	pi_lua_multiple_push(l, args...);
-	lua_call(l, sizeof...(args)+1, 1);
+	pi_lua_protected_call(l, sizeof...(args)+1, 1);
 	pi_lua_generic_pull(l, -1, return_value);
 	lua_pop(l, 1);
+	LUA_DEBUG_END(l, 0);
 	return return_value;
 }
 
@@ -334,15 +366,18 @@ template <typename Ret1, typename Ret2, typename ...Ret, typename Key, typename 
 inline std::tuple<Ret1, Ret2, Ret...> LuaObject<T>::CallMethod(T* o, const Key &key, const Args &...args) {
 	lua_State *l = Lua::manager->GetLuaState();
 
+	LUA_DEBUG_START(l);
+	lua_checkstack(l, sizeof...(args)+5);
 	PushToLua(o);
 	pi_lua_generic_push(l, key);
 	lua_gettable(l, -2);
 	lua_pushvalue(l, -2);
 	lua_remove(l, -3);
 	pi_lua_multiple_push(l, args...);
-	lua_call(l, sizeof...(args)+1, 2+sizeof...(Ret));
+	pi_lua_protected_call(l, sizeof...(args)+1, 2+sizeof...(Ret));
 	auto ret_values = pi_lua_multiple_pull<Ret1, Ret2, Ret...>(l, -2-static_cast<int>(sizeof...(Ret)));
 	lua_pop(l, 2+static_cast<int>(sizeof...(Ret)));
+	LUA_DEBUG_END(l, 0);
 	return ret_values;
 }
 

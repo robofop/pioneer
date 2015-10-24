@@ -1,4 +1,4 @@
-// Copyright © 2008-2014 Pioneer Developers. See AUTHORS.txt for details
+// Copyright © 2008-2015 Pioneer Developers. See AUTHORS.txt for details
 // Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
 
 #ifndef _SHIPCONTROLLER_H
@@ -9,6 +9,7 @@
  */
 #include "libs.h"
 #include "Serializer.h"
+#include "json/json.h"
 
 class Ship;
 class Space;
@@ -18,6 +19,11 @@ enum FlightControlState {
 	CONTROL_FIXSPEED,
 	CONTROL_FIXHEADING_FORWARD,
 	CONTROL_FIXHEADING_BACKWARD,
+	CONTROL_FIXHEADING_NORMAL,
+	CONTROL_FIXHEADING_ANTINORMAL,
+	CONTROL_FIXHEADING_RADIALLY_INWARD,
+	CONTROL_FIXHEADING_RADIALLY_OUTWARD,
+	CONTROL_FIXHEADING_KILLROT,
 	CONTROL_AUTOPILOT,
 
 	CONTROL_STATE_COUNT
@@ -35,8 +41,8 @@ public:
 	ShipController() { }
 	virtual ~ShipController() { }
 	virtual Type GetType() { return AI; }
-	virtual void Save(Serializer::Writer &wr, Space *s) { }
-	virtual void Load(Serializer::Reader &rd) { }
+	virtual void SaveToJson(Json::Value &jsonObj, Space *s) { }
+	virtual void LoadFromJson(const Json::Value &jsonObj) { }
 	virtual void PostLoadFixup(Space *) { }
 	virtual void StaticUpdate(float timeStep);
 	virtual void SetFlightControlState(FlightControlState s) { }
@@ -50,12 +56,12 @@ public:
 	PlayerShipController();
 	~PlayerShipController();
 	virtual Type GetType() { return PLAYER; }
-	void Save(Serializer::Writer &wr, Space *s);
-	void Load(Serializer::Reader &rd);
+	void SaveToJson(Json::Value &jsonObj, Space *s);
+	void LoadFromJson(const Json::Value &jsonObj);
 	void PostLoadFixup(Space *s);
 	void StaticUpdate(float timeStep);
 	// Poll controls, set thruster states, gun states and target velocity
-	void PollControls(float timeStep, const bool force_rotation_damping);
+	void PollControls(float timeStep, const bool force_rotation_damping, int *mouseMotion);
 	bool IsMouseActive() const { return m_mouseActive; }
 	double GetSetSpeed() const { return m_setSpeed; }
 	FlightControlState GetFlightControlState() const { return m_flightControlState; }

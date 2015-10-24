@@ -23,10 +23,6 @@
       "description" : "",
       "message" : "Vissza"
    },
-   "HANG_UP" : {
-      "description" : "",
-      "message" : "Kapcsolat megszakítása."
-   },
    "IM_SORRY_IM_NOT_PREPARED_TO_GO_ANY_LOWER" : {
       "description" : "",
       "message" : "Sajnálom, de ennél alacsonyabbat nem tudok elfogadni."
@@ -46,6 +42,10 @@
    "NAVIGATOR" : {
       "description" : "",
       "message" : "Navigátor"
+   },
+   "NO_CREW_AVAILABLE" : {
+      "description" : "",
+      "message" : "Sajnos jelenleg senki sem keres állást."
    },
    "NO_EXPERIENCE" : {
       "description" : "",

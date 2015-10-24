@@ -1,4 +1,4 @@
-// Copyright © 2008-2014 Pioneer Developers. See AUTHORS.txt for details
+// Copyright © 2008-2015 Pioneer Developers. See AUTHORS.txt for details
 // Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
 
 #include "libs.h"
@@ -94,14 +94,17 @@
 static bool instantiated = false;
 
 static std::map< std::string, std::map<std::string,PromotionTest> > *promotions;
+static std::map< std::string, SerializerPair > *serializers;
 
 static void _teardown() {
 	delete promotions;
+	delete serializers;
 }
 
 static inline void _instantiate() {
 	if (!instantiated) {
 		promotions = new std::map< std::string, std::map<std::string,PromotionTest> >;
+		serializers = new std::map< std::string, SerializerPair >;
 
 		// XXX atexit is not a very nice way to deal with this in C++
 		atexit(_teardown);
@@ -135,6 +138,32 @@ int LuaObjectBase::l_hasprop(lua_State *l)
 	return 1;
 }
 
+int LuaObjectBase::l_unsetprop(lua_State *l)
+{
+	luaL_checktype(l, 1, LUA_TUSERDATA);
+	const std::string key(luaL_checkstring(l, 2));
+
+	// quick check to make sure this object actually has properties
+	// before we go diving through the stack etc
+	lua_getuservalue(l, 1);
+	if (lua_isnil(l, -1))
+		return luaL_error(l, "Object has no property map");
+
+	LuaObjectBase *lo = static_cast<LuaObjectBase*>(lua_touserdata(l, 1));
+	LuaWrappable *o = lo->GetObject();
+	if (!o)
+		return luaL_error(l, "Object is no longer valid");
+
+	PropertiedObject *po = dynamic_cast<PropertiedObject*>(o);
+	assert(po);
+
+	po->Properties().PushLuaTable();
+	lua_pushvalue(l, 2);
+	lua_pushnil(l);
+	lua_settable(l, -3);
+
+	return 0;
+}
 int LuaObjectBase::l_setprop(lua_State *l)
 {
 	luaL_checktype(l, 1, LUA_TUSERDATA);
@@ -326,8 +355,8 @@ int LuaObjectBase::l_dispatch_index(lua_State *l)
 		}
 	}
 
-	luaL_error(l, "unable to resolve method or attribute '%s'", lua_tostring(l, 2));
-	return 0;
+	lua_pushnil(l);
+	return 1;
 }
 
 static void get_names_from_table(lua_State *l, std::vector<std::string> &names, const std::string &prefix, bool methodsOnly)
@@ -581,9 +610,12 @@ void LuaObjectBase::CreateClass(const char *type, const char *parent, const luaL
 	lua_pushcfunction(l, LuaObjectBase::l_isa);
 	lua_rawset(l, -3);
 
-	// add the setprop and hasprop methods
+	// add the setprop, unsetprop and hasprop methods
 	lua_pushstring(l, "setprop");
 	lua_pushcfunction(l, LuaObjectBase::l_setprop);
+	lua_rawset(l, -3);
+	lua_pushstring(l, "unsetprop");
+	lua_pushcfunction(l, LuaObjectBase::l_unsetprop);
 	lua_rawset(l, -3);
 	lua_pushstring(l, "hasprop");
 	lua_pushcfunction(l, LuaObjectBase::l_hasprop);
@@ -836,6 +868,49 @@ bool LuaObjectBase::Isa(const char *base) const
 void LuaObjectBase::RegisterPromotion(const char *base_type, const char *target_type, PromotionTest test_fn)
 {
 	(*promotions)[base_type][target_type] = test_fn;
+}
+
+void LuaObjectBase::RegisterSerializer(const char *type, SerializerPair pair)
+{
+	(*serializers)[type] = pair;
+}
+
+std::string LuaObjectBase::Serialize()
+{
+	static char buf[256];
+
+	lua_State *l = Lua::manager->GetLuaState();
+
+	auto i = serializers->find(m_type);
+	if (i == serializers->end()) {
+		luaL_error(l, "No registered serializer for type %s\n", m_type);
+		abort();
+	}
+
+	snprintf(buf, sizeof(buf), "%s\n", m_type);
+
+	return std::string(buf) + (*i).second.serialize(GetObject());
+}
+
+bool LuaObjectBase::Deserialize(const char *stream, const char **next)
+{
+	static char buf[256];
+
+	const char *end = strchr(stream, '\n');
+	int len = end - stream;
+	end++; // skip newline
+
+	snprintf(buf, sizeof(buf), "%.*s", len, stream);
+
+	lua_State *l = Lua::manager->GetLuaState();
+
+	auto i = serializers->find(buf);
+	if (i == serializers->end()) {
+		luaL_error(l, "No registered deserializer for type %s\n", buf);
+		abort();
+	}
+
+	return (*i).second.deserialize(end, next);
 }
 
 void *LuaObjectBase::Allocate(size_t n) {

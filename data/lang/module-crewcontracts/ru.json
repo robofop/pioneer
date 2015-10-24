@@ -23,10 +23,6 @@
       "description" : "",
       "message" : "[Назад]"
    },
-   "HANG_UP" : {
-      "description" : "",
-      "message" : "Спасибо за информацию, конец связи."
-   },
    "IM_SORRY_IM_NOT_PREPARED_TO_GO_ANY_LOWER" : {
       "description" : "",
       "message" : "Извините, но я не готов к понижению."
@@ -46,6 +42,10 @@
    "NAVIGATOR" : {
       "description" : "",
       "message" : "Навигатор"
+   },
+   "NO_CREW_AVAILABLE" : {
+      "description" : "",
+      "message" : "Сожалеем, но на станции {station} нет подходящих кандидатов, которые ищут работу."
    },
    "NO_EXPERIENCE" : {
       "description" : "",

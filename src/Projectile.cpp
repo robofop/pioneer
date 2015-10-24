@@ -1,4 +1,4 @@
-// Copyright © 2008-2014 Pioneer Developers. See AUTHORS.txt for details
+// Copyright © 2008-2015 Pioneer Developers. See AUTHORS.txt for details
 // Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
 
 #include "libs.h"
@@ -16,11 +16,13 @@
 #include "Pi.h"
 #include "Game.h"
 #include "LuaEvent.h"
+#include "LuaUtils.h"
 #include "graphics/Graphics.h"
 #include "graphics/Material.h"
 #include "graphics/Renderer.h"
 #include "graphics/VertexArray.h"
 #include "graphics/TextureBuilder.h"
+#include "json/JsonUtils.h"
 
 std::unique_ptr<Graphics::VertexArray> Projectile::s_sideVerts;
 std::unique_ptr<Graphics::VertexArray> Projectile::s_glowVerts;
@@ -110,7 +112,11 @@ Projectile::Projectile(): Body()
 {
 	if (!s_sideMat) BuildModel();
 	SetOrient(matrix3x3d::Identity());
-	m_type = 1;
+	m_lifespan = 0;
+	m_baseDam = 0;
+	m_length = 0;
+	m_width = 0;
+	m_mining = false;
 	m_age = 0;
 	m_parent = 0;
 	m_flags |= FLAG_DRAW_LAST;
@@ -120,24 +126,54 @@ Projectile::~Projectile()
 {
 }
 
-void Projectile::Save(Serializer::Writer &wr, Space *space)
+void Projectile::SaveToJson(Json::Value &jsonObj, Space *space)
 {
-	Body::Save(wr, space);
-	wr.Vector3d(m_baseVel);
-	wr.Vector3d(m_dirVel);
-	wr.Float(m_age);
-	wr.Int32(m_type);
-	wr.Int32(space->GetIndexForBody(m_parent));
+	Body::SaveToJson(jsonObj, space);
+
+	Json::Value projectileObj(Json::objectValue); // Create JSON object to contain projectile data.
+
+	VectorToJson(projectileObj, m_baseVel, "base_vel");
+	VectorToJson(projectileObj, m_dirVel, "dir_vel");
+	projectileObj["age"] = FloatToStr(m_age);
+	projectileObj["life_span"] = FloatToStr(m_lifespan);
+	projectileObj["base_dam"] = FloatToStr(m_baseDam);
+	projectileObj["length"] = FloatToStr(m_length);
+	projectileObj["width"] = FloatToStr(m_width);
+	projectileObj["mining"] = m_mining;
+	ColorToJson(projectileObj, m_color, "color");
+	projectileObj["index_for_body"] = space->GetIndexForBody(m_parent);
+
+	jsonObj["projectile"] = projectileObj; // Add projectile object to supplied object.
 }
 
-void Projectile::Load(Serializer::Reader &rd, Space *space)
+void Projectile::LoadFromJson(const Json::Value &jsonObj, Space *space)
 {
-	Body::Load(rd, space);
-	m_baseVel = rd.Vector3d();
-	m_dirVel = rd.Vector3d();
-	m_age = rd.Float();
-	m_type = rd.Int32();
-	m_parentIndex = rd.Int32();
+	Body::LoadFromJson(jsonObj, space);
+
+	if (!jsonObj.isMember("projectile")) throw SavedGameCorruptException();
+	Json::Value projectileObj = jsonObj["projectile"];
+
+	if (!projectileObj.isMember("base_vel")) throw SavedGameCorruptException();
+	if (!projectileObj.isMember("dir_vel")) throw SavedGameCorruptException();
+	if (!projectileObj.isMember("age")) throw SavedGameCorruptException();
+	if (!projectileObj.isMember("life_span")) throw SavedGameCorruptException();
+	if (!projectileObj.isMember("base_dam")) throw SavedGameCorruptException();
+	if (!projectileObj.isMember("length")) throw SavedGameCorruptException();
+	if (!projectileObj.isMember("width")) throw SavedGameCorruptException();
+	if (!projectileObj.isMember("mining")) throw SavedGameCorruptException();
+	if (!projectileObj.isMember("color")) throw SavedGameCorruptException();
+	if (!projectileObj.isMember("index_for_body")) throw SavedGameCorruptException();
+
+	JsonToVector(&m_baseVel, projectileObj, "base_vel");
+	JsonToVector(&m_dirVel, projectileObj, "dir_vel");
+	m_age = StrToFloat(projectileObj["age"].asString());
+	m_lifespan = StrToFloat(projectileObj["life_span"].asString());
+	m_baseDam = StrToFloat(projectileObj["base_dam"].asString());
+	m_length = StrToFloat(projectileObj["length"].asString());
+	m_width = StrToFloat(projectileObj["width"].asString());
+	m_mining = projectileObj["mining"].asBool();
+	JsonToColor(&m_color, projectileObj, "color");
+	m_parentIndex = projectileObj["index_for_body"].asInt();
 }
 
 void Projectile::PostLoadFixup(Space *space)
@@ -162,41 +198,40 @@ void Projectile::TimeStepUpdate(const float timeStep)
 {
 	m_age += timeStep;
 	SetPosition(GetPosition() + (m_baseVel+m_dirVel) * double(timeStep));
-	if (m_age > Equip::lasers[m_type].lifespan) Pi::game->GetSpace()->KillBody(this);
+	if (m_age > m_lifespan) Pi::game->GetSpace()->KillBody(this);
 }
 
 /* In hull kg */
 float Projectile::GetDamage() const
 {
-	float dam = Equip::lasers[m_type].damage;
-	float lifespan = Equip::lasers[m_type].lifespan;
-	return dam * sqrt((lifespan - m_age)/lifespan);
+	return m_baseDam * sqrt((m_lifespan - m_age)/m_lifespan);
 	// TEST
 //	return 0.01f;
 }
 
 double Projectile::GetRadius() const
 {
-	float length = Equip::lasers[m_type].length;
-	float width = Equip::lasers[m_type].width;
-	return sqrt(length*length + width*width);
+	return sqrt(m_length*m_length + m_width*m_width);
 }
 
 static void MiningLaserSpawnTastyStuff(Frame *f, const SystemBody *asteroid, const vector3d &pos)
 {
-	Equip::Type t;
-	if (20*Pi::rng.Fixed() < asteroid->GetMetallicity()) {
-		t = Equip::PRECIOUS_METALS;
-	} else if (8*Pi::rng.Fixed() < asteroid->GetMetallicity()) {
-		t = Equip::METAL_ALLOYS;
-	} else if (Pi::rng.Fixed() < asteroid->GetMetallicity()) {
-		t = Equip::METAL_ORE;
+	lua_State *l = Lua::manager->GetLuaState();
+	pi_lua_import(l, "Equipment");
+	LuaTable cargo_types = LuaTable(l, -1).Sub("cargo");
+	if (20*Pi::rng.Fixed() < asteroid->GetMetallicityAsFixed()) {
+		cargo_types.Sub("precious_metals");
+	} else if (8*Pi::rng.Fixed() < asteroid->GetMetallicityAsFixed()) {
+		cargo_types.Sub("metal_alloys");
+	} else if (Pi::rng.Fixed() < asteroid->GetMetallicityAsFixed()) {
+		cargo_types.Sub("metal_ore");
 	} else if (Pi::rng.Fixed() < fixed(1,2)) {
-		t = Equip::WATER;
+		cargo_types.Sub("water");
 	} else {
-		t = Equip::RUBBISH;
+		cargo_types.Sub("rubbish");
 	}
-	CargoBody *cargo = new CargoBody(t);
+	CargoBody *cargo = new CargoBody(LuaRef(l, -1));
+	lua_pop(l, 3);
 	cargo->SetFrame(f);
 	cargo->SetPosition(pos);
 	const double x = Pi::rng.Double();
@@ -228,7 +263,7 @@ void Projectile::StaticUpdate(const float timeStep)
 			}
 		}
 	}
-	if (Equip::lasers[m_type].flags & Equip::LASER_MINING) {
+	if (m_mining) {
 		// need to test for terrain hit
 		if (GetFrame()->GetBody() && GetFrame()->GetBody()->IsType(Object::PLANET)) {
 			Planet *const planet = static_cast<Planet*>(GetFrame()->GetBody());
@@ -272,15 +307,15 @@ void Projectile::Render(Graphics::Renderer *renderer, const Camera *camera, cons
 	// increase visible size based on distance from camera, z is always negative
 	// allows them to be smaller while maintaining visibility for game play
 	const float dist_scale = float(viewCoords.z / -500);
-	const float length = Equip::lasers[m_type].length + dist_scale;
-	const float width = Equip::lasers[m_type].width + dist_scale;
+	const float length = m_length + dist_scale;
+	const float width = m_width + dist_scale;
 
 	renderer->SetTransform(m * matrix4x4f::ScaleMatrix(width, width, length));
 
-	Color color = Equip::lasers[m_type].color;
+	Color color = m_color;
 	// fade them out as they age so they don't suddenly disappear
 	// this matches the damage fall-off calculation
-	const float base_alpha = sqrt(1.0f - m_age/Equip::lasers[m_type].lifespan);
+	const float base_alpha = sqrt(1.0f - m_age/m_lifespan);
 	// fade out side quads when viewing nearly edge on
 	vector3f view_dir = vector3f(viewCoords).Normalized();
 	color.a = (base_alpha * (1.f - powf(fabs(dir.Dot(view_dir)), length))) * 255;
@@ -301,11 +336,16 @@ void Projectile::Render(Graphics::Renderer *renderer, const Camera *camera, cons
 	}
 }
 
-void Projectile::Add(Body *parent, Equip::Type type, const vector3d &pos, const vector3d &baseVel, const vector3d &dirVel)
+void Projectile::Add(Body *parent, float lifespan, float dam, float length, float width, bool mining, const Color &color, const vector3d &pos, const vector3d &baseVel, const vector3d &dirVel)
 {
 	Projectile *p = new Projectile();
 	p->m_parent = parent;
-	p->m_type = Equip::types[type].tableIndex;
+	p->m_lifespan = lifespan;
+	p->m_baseDam = dam;
+	p->m_length = length;
+	p->m_width = width;
+	p->m_mining = mining;
+	p->m_color = color;
 	p->SetFrame(parent->GetFrame());
 
 	p->SetOrient(parent->GetOrient());

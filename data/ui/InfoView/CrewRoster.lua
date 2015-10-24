@@ -1,4 +1,4 @@
--- Copyright © 2008-2014 Pioneer Developers. See AUTHORS.txt for details
+-- Copyright © 2008-2015 Pioneer Developers. See AUTHORS.txt for details
 -- Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
 
 local Engine = import("Engine")
@@ -7,6 +7,8 @@ local Game = import("Game")
 local Format = import("Format")
 local ShipDef = import("ShipDef")
 local Comms = import("Comms")
+local Equipment = import("Equipment")
+
 
 local InfoFace = import("ui/InfoFace")
 local SmallLabeledButton = import("ui/SmallLabeledButton")
@@ -60,10 +62,10 @@ local crewRoster = function ()
 			ATTEMPT_TO_REPAIR_HULL = function ()
 				-- Convoluted...
 				local hullMass = ShipDef[Game.player.shipId].hullMass
-				local hullMassLeft = Game.player.hullMassLeft 
+				local hullMassLeft = Game.player.hullMassLeft
 				local hullDamage = hullMass - hullMassLeft
 				if hullDamage > 0 then
-					if Game.player:GetEquipCount('CARGO','METAL_ALLOYS') <= 0 then
+					if Game.player:CountEquip(Equipment.cargo.metal_alloys, cargo) <= 0 then
 						feedback:SetText(l.NOT_ENOUGH_ALLOY_TO_ATTEMPT_A_REPAIR:interp({alloy = l.METAL_ALLOYS}))
 						return
 					end
@@ -72,14 +74,14 @@ local crewRoster = function ()
 						local repair = math.min(
 							-- Need metal alloys for repair. Check amount.
 							math.ceil(hullDamage/(64 - result)), -- 65 > result > 3
-							Game.player:GetEquipCount('CARGO','METAL_ALLOYS')
+							Game.player:CountEquip(Equipment.cargo.metal_alloys, cargo)
 						)
-						Game.player:RemoveEquip('METAL_ALLOYS',repair) -- These will now be part of the hull.
-						repairPercent = math.min(math.ceil(100 * (repair + hullMassLeft) / hullMass), 100) -- Get new hull percentage...
+						Game.player:RemoveEquip(Equipment.cargo.metal_alloys, repair) -- These will now be part of the hull.
+						local repairPercent = math.min(math.ceil(100 * (repair + hullMassLeft) / hullMass), 100) -- Get new hull percentage...
 						Game.player:SetHullPercent(repairPercent)   -- ...and set it.
 						feedback:SetText(l.HULL_REPAIRED_BY_NAME_NOW_AT_N_PERCENT:interp({name = crewMember.name,repairPercent = repairPercent}))
 					else
-						repairPercent = math.max(math.floor(100 * (hullMassLeft - 1) / hullMass), 1) -- Get new hull percentage...
+						local repairPercent = math.max(math.floor(100 * (hullMassLeft - 1) / hullMass), 1) -- Get new hull percentage...
 						Game.player:SetHullPercent(repairPercent)   -- ...and set it.
 						feedback:SetText(l.HULL_REPAIR_ATTEMPT_FAILED_HULL_SUFFERED_MINOR_DAMAGE)
 					end
@@ -97,6 +99,7 @@ local crewRoster = function ()
 						JUMPING = l.WE_ARE_IN_HYPERSPACE_COMMANDER,
 						HYPERSPACE = l.WE_ARE_IN_HYPERSPACE_COMMANDER,
 						DOCKING = l.THE_SHIP_IS_UNDER_STATION_CONTROL_COMMANDER,
+						UNDOCKING = l.THE_SHIP_IS_UNDER_STATION_CONTROL_COMMANDER,
 					})[Game.player.flightState])
 				elseif not Game.player:GetCombatTarget() then
 					feedback:SetText(l.YOU_MUST_FIRST_SELECT_A_COMBAT_TARGET_COMMANDER)
@@ -106,7 +109,7 @@ local crewRoster = function ()
 						feedback:SetText(l.THERE_IS_NOBODY_ELSE_ON_BOARD_ABLE_TO_FLY_THIS_SHIP)
 						pilotLockout()
 					else
-						feedback:SetText(l.PILOT_SEAT_IS_NOW_OCCUPIED_BY_NAME:interp({name = crewMember.name,repairPercent = repairPercent}))
+						feedback:SetText(l.PILOT_SEAT_IS_NOW_OCCUPIED_BY_NAME:interp({name = crewMember.name}))
 						Game.player:AIKill(Game.player:GetCombatTarget())
 					end
 				end
@@ -131,7 +134,7 @@ local crewRoster = function ()
 						feedback:SetText(l.THERE_IS_NOBODY_ELSE_ON_BOARD_ABLE_TO_FLY_THIS_SHIP)
 						pilotLockout()
 					else
-						feedback:SetText(l.PILOT_SEAT_IS_NOW_OCCUPIED_BY_NAME:interp({name = crewMember.name,repairPercent = repairPercent}))
+						feedback:SetText(l.PILOT_SEAT_IS_NOW_OCCUPIED_BY_NAME:interp({name = crewMember.name}))
 						Game.player:AIDockWith(target)
 					end
 				end

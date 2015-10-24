@@ -1,4 +1,4 @@
--- Copyright © 2008-2014 Pioneer Developers. See AUTHORS.txt for details
+-- Copyright © 2008-2015 Pioneer Developers. See AUTHORS.txt for details
 -- Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
 
 local Engine = import("Engine")
@@ -8,11 +8,10 @@ local Space = import("Space")
 local Comms = import("Comms")
 local Event = import("Event")
 local Mission = import("Mission")
-local NameGen = import("NameGen")
 local Format = import("Format")
 local Serializer = import("Serializer")
 local Character = import("Character")
-local EquipDef = import("EquipDef")
+local Equipment = import("Equipment")
 local ShipDef = import("ShipDef")
 local Ship = import("Ship")
 local utils = import("utils")
@@ -270,7 +269,6 @@ local makeAdvert = function (station, manualFlavour, nearbystations)
 		risk		= risk,
 		urgency		= urgency,
 		reward		= reward,
-		isfemale	= isfemale,
 		faceseed	= Engine.rand:Integer(),
 	}
 
@@ -374,19 +372,19 @@ local onEnterSystem = function (player)
 
 				if Engine.rand:Number(1) <= risk then
 					local shipdef = shipdefs[Engine.rand:Integer(1,#shipdefs)]
-					local default_drive = 'DRIVE_CLASS'..tostring(shipdef.hyperdriveClass)
+					local default_drive = Equipment.hyperspace['hyperdrive_'..tostring(shipdef.hyperdriveClass)]
 
-					local max_laser_size = shipdef.capacity - EquipDef[default_drive].mass
-                    local laserdefs = utils.build_array(utils.filter(
-                        function (k,def) return def.slot == 'LASER' and def.mass <= max_laser_size and string.sub(def.id,0,11) == 'PULSECANNON' end,
-                        pairs(EquipDef)
-                    ))
-                    local laserdef = laserdefs[Engine.rand:Integer(1,#laserdefs)]
+					local max_laser_size = shipdef.capacity - default_drive.capabilities.mass
+					local laserdefs = utils.build_array(utils.filter(
+						function (k,l) return l:IsValidSlot('laser_front') and l.capabilities.mass <= max_laser_size and l.l10n_key:find("PULSECANNON") end,
+						pairs(Equipment.laser)
+					))
+					local laserdef = laserdefs[Engine.rand:Integer(1,#laserdefs)]
 
 					ship = Space.SpawnShipNear(shipdef.id, Game.player, 50, 100)
 					ship:SetLabel(Ship.MakeRandomLabel())
 					ship:AddEquip(default_drive)
-					ship:AddEquip(laserdef.id)
+					ship:AddEquip(laserdef)
 					ship:AIKill(Game.player)
 				end
 			end
@@ -465,7 +463,7 @@ local onGameStart = function ()
 	for k,ad in pairs(loaded_data.ads) do
 		local ref = ad.station:AddAdvert({
 			description = ad.desc,
-            icon        = ad.urgency >=  0.8 and "delivery_urgent" or "delivery",
+			icon        = ad.urgency >=  0.8 and "delivery_urgent" or "delivery",
 			onChat      = onChat,
 			onDelete    = onDelete,
 			isEnabled   = isEnabled })
@@ -479,7 +477,7 @@ end
 
 local onClick = function (mission)
 	local dist = Game.system and string.format("%.2f", Game.system:DistanceTo(mission.location)) or "???"
-
+	local danger
 	if mission.risk <= 0.1 then
 		danger = (l.I_HIGHLY_DOUBT_IT)
 	elseif mission.risk > 0.1 and mission.risk <= 0.3 then

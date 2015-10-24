@@ -1,4 +1,4 @@
-// Copyright © 2008-2014 Pioneer Developers. See AUTHORS.txt for details
+// Copyright © 2008-2015 Pioneer Developers. See AUTHORS.txt for details
 // Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
 
 #include "BaseLoader.h"
@@ -89,8 +89,10 @@ void BaseLoader::FindPatterns(PatternContainer &output)
 		const FileSystem::FileInfo &info = files.Current();
 		if (info.IsFile()) {
 			const std::string &name = info.GetName();
-			if (ends_with_ci(name, ".png") && starts_with(name, "pattern"))
-				output.push_back(Pattern(name, m_curPath, m_renderer));
+			if (starts_with(name, "pattern")) {
+				if (ends_with_ci(name, ".png") || ends_with_ci(name, ".dds"))
+					output.push_back(Pattern(name, m_curPath, m_renderer));
+			}
 		}
 	}
 }

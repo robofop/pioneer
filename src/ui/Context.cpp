@@ -1,4 +1,4 @@
-// Copyright © 2008-2014 Pioneer Developers. See AUTHORS.txt for details
+// Copyright © 2008-2015 Pioneer Developers. See AUTHORS.txt for details
 // Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
 
 #include "Context.h"
@@ -144,6 +144,11 @@ void Context::Update()
 void Context::Draw()
 {
 	Graphics::Renderer *r = GetRenderer();
+	r->ClearDepthBuffer();
+
+	// Ticket for the viewport mostly
+	Graphics::Renderer::StateTicket ticket(r);
+	r->SetViewport(0, 0, m_width, m_height);
 
 	// reset renderer for each layer
 	for (std::vector<Layer*>::iterator i = m_layers.begin(); i != m_layers.end(); ++i) {
@@ -167,23 +172,12 @@ void Context::Draw()
 
 Widget *Context::CallTemplate(const char *name, const LuaTable &args)
 {
-	lua_State *l = m_lua->GetLuaState();
-
-	m_templateStore.PushCopyToStack();
-	const LuaTable t(l, -1);
-	if (!t.Get<bool,const char *>(name))
-		return 0;
-
-	t.PushValueToStack<const char*>(name);
-	lua_pushvalue(l, args.GetIndex());
-	pi_lua_protected_call(m_lua->GetLuaState(), 1, 1);
-
-	return LuaObject<UI::Widget>::CheckFromLua(-1);
+	return ScopedTable(m_templateStore).Call<UI::Widget *>(name, args);
 }
 
 Widget *Context::CallTemplate(const char *name)
 {
-	return CallTemplate(name, LuaTable(m_lua->GetLuaState()));
+	return CallTemplate(name, ScopedTable(m_lua->GetLuaState()));
 }
 
 void Context::DrawWidget(Widget *w)

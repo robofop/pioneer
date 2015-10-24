@@ -5,7 +5,7 @@
    },
    "CREWDETAILSHEETBB" : {
       "description" : "",
-      "message" : "Name: {name}\nExperience: {experience}\nAsking wage: {wage} per week\n\n{response}\n"
+      "message" : "İsim: {name}\nDeneyim: {experience}\nİstenen Ücret: {wage} haftalık\n\n{response}\n"
    },
    "CREWMEMBER_WAGE_PER_WEEK" : {
       "description" : "",
@@ -22,10 +22,6 @@
    "GO_BACK" : {
       "description" : "",
       "message" : "Geri"
-   },
-   "HANG_UP" : {
-      "description" : "",
-      "message" : "Bekle."
    },
    "IM_SORRY_IM_NOT_PREPARED_TO_GO_ANY_LOWER" : {
       "description" : "",
@@ -46,6 +42,10 @@
    "NAVIGATOR" : {
       "description" : "",
       "message" : "Dümenci"
+   },
+   "NO_CREW_AVAILABLE" : {
+      "description" : "",
+      "message" : "Sorry, no candidates are currently seeking employment at {station}"
    },
    "NO_EXPERIENCE" : {
       "description" : "",
@@ -89,7 +89,7 @@
    },
    "THATS_EXTREMELY_GENEROUS_OF_YOU" : {
       "description" : "",
-      "message" : "Gerçekten çok cömertsiniz"
+      "message" : "Gerçekten çok cömertsiniz!"
    },
    "THAT_CERTAINLY_MAKES_THIS_OFFER_LOOK_BETTER" : {
       "description" : "",

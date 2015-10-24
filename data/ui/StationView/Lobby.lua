@@ -1,4 +1,4 @@
--- Copyright © 2008-2014 Pioneer Developers. See AUTHORS.txt for details
+-- Copyright © 2008-2015 Pioneer Developers. See AUTHORS.txt for details
 -- Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
 
 local Engine = import("Engine")
@@ -31,7 +31,7 @@ local lobby = function (tab)
 		elseif not Game.player:Undock() then
 			Comms.ImportantMessage(l.LAUNCH_PERMISSION_DENIED_BUSY, station.label)
 		else
-			Game.SwitchToWorldView()
+			Game.SwitchView()
 		end
 	end)
 

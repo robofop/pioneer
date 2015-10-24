@@ -1,4 +1,4 @@
--- Copyright © 2008-2014 Pioneer Developers. See AUTHORS.txt for details
+-- Copyright © 2008-2015 Pioneer Developers. See AUTHORS.txt for details
 -- Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
 
 local Engine = import("Engine")
@@ -9,6 +9,11 @@ local ShipDef = import("ShipDef")
 local Player = import("Player")
 local SystemPath = import("SystemPath")
 local ErrorScreen = import("ErrorScreen")
+local equipment = import("Equipment")
+local cargo = equipment.cargo
+local misc = equipment.misc
+local laser = equipment.laser
+local hyperspace = equipment.hyperspace
 
 local ui = Engine.ui
 local l = Lang.GetResource("ui-core");
@@ -16,35 +21,35 @@ local l = Lang.GetResource("ui-core");
 local setupPlayerSol = function ()
 	Game.player:SetShipType("sinonatrix")
 	Game.player:SetLabel(Ship.MakeRandomLabel())
-	Game.player:AddEquip("DRIVE_CLASS"..ShipDef[Game.player.shipId].hyperdriveClass)
-	Game.player:AddEquip("PULSECANNON_1MW")
-	Game.player:AddEquip("ATMOSPHERIC_SHIELDING")
-	Game.player:AddEquip("AUTOPILOT")
-	Game.player:AddEquip("SCANNER")
-	Game.player:AddEquip("HYDROGEN", 2)
+	Game.player:AddEquip(hyperspace["hyperdrive_"..ShipDef[Game.player.shipId].hyperdriveClass])
+	Game.player:AddEquip(laser.pulsecannon_1mw)
+	Game.player:AddEquip(misc.atmospheric_shielding)
+	Game.player:AddEquip(misc.autopilot)
+	Game.player:AddEquip(misc.scanner)
+	Game.player:AddEquip(cargo.hydrogen, 2)
 	Game.player:SetMoney(100)
 end
 
 local setupPlayerEridani = function ()
 	Game.player:SetShipType("pumpkinseed")
 	Game.player:SetLabel(Ship.MakeRandomLabel())
-	Game.player:AddEquip("DRIVE_CLASS"..ShipDef[Game.player.shipId].hyperdriveClass)
-	Game.player:AddEquip("PULSECANNON_1MW")
-	Game.player:AddEquip("ATMOSPHERIC_SHIELDING")
-	Game.player:AddEquip("AUTOPILOT")
-	Game.player:AddEquip("SCANNER")
-	Game.player:AddEquip("HYDROGEN", 2)
+	Game.player:AddEquip(hyperspace["hyperdrive_"..ShipDef[Game.player.shipId].hyperdriveClass])
+	Game.player:AddEquip(laser.pulsecannon_1mw)
+	Game.player:AddEquip(misc.atmospheric_shielding)
+	Game.player:AddEquip(misc.autopilot)
+	Game.player:AddEquip(misc.scanner)
+	Game.player:AddEquip(cargo.hydrogen, 2)
 	Game.player:SetMoney(100)
 end
 
 local setupPlayerBarnard = function ()
 	Game.player:SetShipType("xylophis")
 	Game.player:SetLabel(Ship.MakeRandomLabel())
-	--Game.player:AddEquip("PULSECANNON_1MW")
-	Game.player:AddEquip("ATMOSPHERIC_SHIELDING")
-	Game.player:AddEquip("AUTOPILOT")
-	Game.player:AddEquip("SCANNER")
-	Game.player:AddEquip("HYDROGEN", 2)
+	--Game.player:AddEquip(equipment.laser.pulsecannon_1mw)
+	Game.player:AddEquip(misc.atmospheric_shielding)
+	Game.player:AddEquip(misc.autopilot)
+	Game.player:AddEquip(misc.scanner)
+	Game.player:AddEquip(cargo.hydrogen, 2)
 	Game.player:SetMoney(100)
 end
 
@@ -78,14 +83,27 @@ local doSettingsScreen = function()
 	)
 end
 
+local doQuitConfirmation = function()
+	if Engine.GetConfirmQuit() then
+		ui:NewLayer(
+			ui.templates.QuitConfirmation({
+				onConfirm = function () Engine.Quit() end,
+				onCancel  = function () ui:DropLayer() end
+			})
+		)
+	else
+		Engine.Quit()
+	end
+end
+
 local buttonDefs = {
-	{ l.QUICKLOAD,              function () loadGame("_quicksave") end },
+	{ l.CONTINUE_GAME,          function () loadGame("_exit") end },
 	{ l.START_AT_EARTH,         function () Game.StartGame(SystemPath.New(0,0,0,0,6),48600)   setupPlayerSol() end },
 	{ l.START_AT_NEW_HOPE,      function () Game.StartGame(SystemPath.New(1,-1,-1,0,4)) setupPlayerEridani() end },
 	{ l.START_AT_BARNARDS_STAR, function () Game.StartGame(SystemPath.New(-1,0,0,0,1))  setupPlayerBarnard() end },
 	{ l.LOAD_GAME,              doLoadDialog },
 	{ l.OPTIONS,                doSettingsScreen },
-	{ l.QUIT,                   function () Engine.Quit() end },
+	{ l.QUIT,                   doQuitConfirmation },
 }
 
 local anims = {}
@@ -132,7 +150,7 @@ table.insert(anims, {
 	duration = 0.4,
 })
 
-local menu = 
+local menu =
 	ui:Grid(1, { 0.2, 0.6, 0.2 })
 		:SetRow(0, {
 			ui:Grid({ 0.1, 0.8, 0.1 }, 1)

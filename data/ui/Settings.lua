@@ -1,4 +1,4 @@
--- Copyright © 2008-2014 Pioneer Developers. See AUTHORS.txt for details
+-- Copyright © 2008-2015 Pioneer Developers. See AUTHORS.txt for details
 -- Licensed under the terms of the GPL v3. See licenses/GPL-3.txt
 
 local Game = import("Game")
@@ -9,6 +9,7 @@ local TabView = import("ui/TabView")
 local SmallLabeledButton = import("ui/SmallLabeledButton")
 local KeyBindingCapture = import("UI.Game.KeyBindingCapture")
 local AxisBindingCapture = import("UI.Game.AxisBindingCapture")
+local ErrorScreen = import("ErrorScreen")
 
 local ui = Engine.ui
 local l = Lang.GetResource("ui-core");
@@ -95,6 +96,18 @@ ui.templates.Settings = function (args)
 			Engine.GetDisplayNavTunnels, Engine.SetDisplayNavTunnels,
 			l.DISPLAY_NAV_TUNNELS)
 
+		local compactScannerCheckBox = optionCheckBox(
+			Engine.GetCompactScanner, Engine.SetCompactScanner,
+			l.COMPACT_SCANNER)
+
+		local confirmQuit = optionCheckBox(
+			Engine.GetConfirmQuit, Engine.SetConfirmQuit,
+			l.QUIT_CONFIRMATION)
+
+		local vsyncCheckBox = optionCheckBox(
+			Engine.GetVSyncEnabled, Engine.SetVSyncEnabled,
+			l.VSYNC)
+
 		local speedLinesCheckBox = optionCheckBox(
 			Engine.GetDisplaySpeedLines, Engine.SetDisplaySpeedLines,
 			l.DISPLAY_SPEED_LINES)
@@ -110,9 +123,18 @@ ui.templates.Settings = function (args)
 		local fullScreenCheckBox = optionCheckBox(
 			Engine.GetFullscreen, Engine.SetFullscreen,
 			l.FULL_SCREEN)
-		local compressionCheckBox = optionCheckBox(
-			Engine.GetTextureCompressionEnabled, Engine.SetTextureCompressionEnabled,
-			l.COMPRESS_TEXTURES)
+			
+		local starDensity = function (caption, getter, setter)
+			local initial_value = getter()
+			local slider = ui:HSlider()
+			local label = ui:Label(caption .. " " .. math.floor(initial_value * 100) .. "%")
+			slider:SetValue(initial_value)
+			slider.onValueChanged:Connect(function (new_value)
+					label:SetText(caption .. " " .. math.floor(new_value * 100) .. "%")
+					setter(new_value)
+				end)
+			return ui:HBox():PackEnd({label, slider})
+		end
 
 		return ui:Grid({1,1}, 1)
 			:SetCell(0,0, ui:Margin(5, 'ALL', ui:VBox(5):PackEnd({
@@ -120,7 +142,7 @@ ui.templates.Settings = function (args)
 				modeDropDown,
 				aaDropDown,
 				fullScreenCheckBox,
-				compressionCheckBox,
+				vsyncCheckBox,
 			})))
 			:SetCell(1,0, ui:Margin(5, 'ALL', ui:VBox(5):PackEnd({
 				planetDetailDropDown,
@@ -131,6 +153,9 @@ ui.templates.Settings = function (args)
 				speedLinesCheckBox,
 				hudTrailsCheckBox,
 				cockpitCheckBox,
+				compactScannerCheckBox,
+				confirmQuit,
+				starDensity(l.STAR_FIELD_DENSITY, Engine.GetAmountStars, Engine.SetAmountStars),
 			})))
 	end
 
@@ -284,7 +309,7 @@ ui.templates.Settings = function (args)
 		button.button.onClick:Connect(function ()
 			local dialog = captureAxisDialog(info.label, function (new_binding, new_binding_description)
 				Engine.SetKeyBinding(info.id, new_binding)
-				button.label:SetText(new_binding_description)
+				button.label:SetText(new_binding_description or '')
 			end)
 			ui:NewLayer(dialog)
 		end)
@@ -376,7 +401,10 @@ ui.templates.SettingsInGame = function ()
 							allowNewFile = true,
 							selectLabel  = l.SAVE,
 							onSelect     = function (filename)
-								Game.SaveGame(filename)
+								local ok, err = pcall(Game.SaveGame, filename)
+								if not ok then
+									ErrorScreen.ShowError(err)
+								end
 								ui:DropLayer()
 							end,
 							onCancel    = function ()
@@ -389,7 +417,7 @@ ui.templates.SettingsInGame = function ()
 					return Game.player.flightState == "HYPERSPACE"
 				end
 			},
-			{ text = l.RETURN_TO_GAME, onClick = Game.SwitchToWorldView },
+			{ text = l.RETURN_TO_GAME, onClick = Game.SwitchView },
 			{ text = l.EXIT_THIS_GAME, onClick = Game.EndGame }
 		}
 	})
